@@ -1,0 +1,44 @@
+#!/usr/bin/make -f
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+DEB_UPSTREAM_VERSION = $(shell dpkg-parsechangelog -S version | cut -d - -f 1 | cut -d : -f 2)
+
+BUILD_ARGS = prefix=/usr libdir=/usr/lib/$(DEB_HOST_MULTIARCH) sysconfdir=/etc bashcompdir=/usr/share/bash-completion/completions NORPATH=1 NDCTL_ENABLE=n BUILD_RPMEM=n
+
+%:
+	#dh $@ --with bash-completion
+	dh $@
+
+override_dh_auto_clean:
+	dh_auto_clean -- $(BUILD_ARGS)
+	rm -rf src/test/unittest/__pycache__
+	rm -rf src/deps/miniasync/build
+
+override_dh_auto_build:
+	+$(MAKE) doc
+	dh_auto_build  -- $(BUILD_ARGS)
+
+override_dh_auto_install:
+	dh_auto_install -- $(BUILD_ARGS)
+
+override_dh_install:
+	mkdir -p debian/tmp/usr/share/pmdk/
+	cp utils/pmdk.magic debian/tmp/usr/share/pmdk/
+	dh_install
+
+override_dh_installexamples:
+	dh_installexamples --exclude=.gitignore --exclude=.vcxproj
+
+override_dh_installman:
+	dh_installman
+ifeq (amd64,$(DEB_HOST_ARCH))
+	dh_installman -p pmdk-tools
+endif
+
+override_dh_missing:
+	dh_missing --list-missing --exclude=usr/share/man --exclude=usr/lib/$(DEB_HOST_MULTIARCH)/pmdk_debug/ --exclude=usr/share/bash-completion/completions/pmempool
+
+override_dh_auto_test:
+	echo "Check skipped"
